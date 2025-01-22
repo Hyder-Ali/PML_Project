@@ -1,0 +1,151 @@
+---
+title: "practical_machine_learning_project"
+author: "Hyder Ali"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+# Introduction
+
+In this project, the goal is to predict the manner in which barbell lifts were performed based on accelerometer data. We will use a Random Forest model to classify the "classe" variable and evaluate the model's performance.
+
+# Data Overview
+
+The data includes accelerometer readings from sensors on the belt, forearm, arm, and dumbbell of 6 participants performing barbell lifts in five different ways. The training dataset is used to build the model, and the test dataset is used for predictions.
+
+```{r load-data, echo=FALSE, message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(caret)
+library(randomForest)
+library(ggplot2)
+
+# Set seed for reproducibility
+set.seed(12345)
+
+# Load data
+training_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training_data <- read.csv(training_url, na.strings = c("NA", "#DIV/0!", ""))
+testing_data <- read.csv(testing_url, na.strings = c("NA", "#DIV/0!", ""))
+
+# Display dimensions of the datasets
+dim(training_data)
+dim(testing_data)
+```
+
+# Data Cleaning
+
+In this section, we remove columns with excessive missing values and irrelevant columns like timestamps and identifiers.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Remove columns with missing values
+training_data <- training_data[, colSums(is.na(training_data)) == 0]
+testing_data <- testing_data[, colSums(is.na(testing_data)) == 0]
+
+# Remove irrelevant columns (timestamps, IDs, etc.)
+training_data <- training_data[, -c(1:7)]
+testing_data <- testing_data[, -c(1:7)]
+
+# Ensure "classe" is a factor
+training_data$classe <- as.factor(training_data$classe)
+```
+
+# Exploratory Data Analysis
+
+Here, we visualize the distribution of the target variable classe.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Plot distribution of target variable
+ggplot(training_data, aes(x = classe)) +
+  geom_bar(fill = "blue") +
+  labs(title = "Distribution of Classe", x = "Classe", y = "Count") +
+  theme_minimal()
+
+# Select a subset of variables for correlation
+cor_data <- training_data[, c(1, 2, 3, 4, 5, 6, 7)]  # Modify with the actual relevant variables
+
+# Compute correlation matrix
+cor_matrix <- cor(cor_data, use = "complete.obs")
+
+# Plot correlation matrix
+library(corrplot)
+corrplot(cor_matrix, method = "color", tl.cex = 0.8, main = "Correlation Matrix")
+
+# Boxplot of sensor readings by class
+ggplot(training_data, aes(x = classe, y = roll_belt)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of roll_belt by Classe", x = "Classe", y = "roll_belt") +
+  theme_minimal()
+
+
+```
+
+# Model Building
+
+We split the data into training and validation sets, and then build a Random Forest model using the training data.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Split data into training and validation sets
+inTrain <- createDataPartition(y = training_data$classe, p = 0.7, list = FALSE)
+training_set <- training_data[inTrain, ]
+validation_set <- training_data[-inTrain, ]
+
+# Train the Random Forest model
+rf_model <- randomForest(classe ~ ., data = training_set, importance = TRUE)
+
+# Display model details
+print(rf_model)
+```
+
+# Model Evaluation
+
+The model is evaluated using the validation set, and the accuracy is computed along with the confusion matrix.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Predict on validation set
+rf_predictions <- predict(rf_model, validation_set)
+
+# Generate confusion matrix
+conf_matrix <- confusionMatrix(rf_predictions, validation_set$classe)
+
+# Print confusion matrix and overall accuracy
+print(conf_matrix)
+
+# Calculate out-of-sample error
+oos_error <- 1 - conf_matrix$overall["Accuracy"]
+cat("Estimated Out-of-Sample Error:", round(oos_error, 4), "\n")
+```
+
+# Feature Importance
+
+We will plot the importance of features used by the Random Forest model to see which ones have the most influence on the predictions.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Plot feature importance
+importance_rf <- importance(rf_model)
+feature_importance <- data.frame(Feature = rownames(importance_rf), Importance = importance_rf[, 1])
+ggplot(feature_importance, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Feature Importance", x = "Feature", y = "Importance") +
+  theme_minimal()
+
+```
+
+# Prediction on Test Data
+
+The trained model is used to predict the "classe" variable for the 20 test cases in the test dataset.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Predict on test data
+final_predictions <- predict(rf_model, testing_data)
+
+# Display predictions
+final_predictions
+```
+
+# Conclusion
+
+This project used Random Forest to predict the manner of barbell lifts based on sensor data. The model showed an estimated out-of-sample error of approximately r round(oos_error * 100, 2)%. Predictions for the 20 test cases are provided above.
